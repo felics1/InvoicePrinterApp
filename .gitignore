@@ -1,0 +1,22 @@
+# Published application and debug artifacts are distributed through Releases
+InvoicePrinterApp.exe
+InvoicePrinterApp.pdb
+Microsoft.Web.WebView2.*.xml
+*.zip
+*.rar
+
+# WebView2 runtime profile: may contain cache, history and local user data
+InvoicePrinterApp.exe.WebView2/
+
+# .NET / Visual Studio generated files
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+

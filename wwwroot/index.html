@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>电子发票拼版打印工具</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f4f7f6;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* ─── 欢迎/上传界面 ─── */
+        #upload-view {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .upload-card {
+            background: #ffffff;
+            padding: 40px 50px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .drop-zone {
+            border: 2px dashed #00b4d8;
+            background: #f0f9ff;
+            border-radius: 12px;
+            padding: 40px 20px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+            .drop-zone:hover {
+                background: #e0f2fe;
+                border-color: #0077b6;
+                transform: scale(1.01);
+            }
+
+            .drop-zone .icon {
+                font-size: 56px;
+                margin-bottom: 15px;
+                display: inline-block;
+                animation: bounce 2s infinite;
+            }
+
+            .drop-zone h2 {
+                font-size: 20px;
+                color: #1e293b;
+                margin-bottom: 8px;
+            }
+
+            .drop-zone .highlight {
+                color: #00b4d8;
+                font-weight: 600;
+                text-decoration: underline;
+            }
+
+            .drop-zone p {
+                font-size: 13px;
+                color: #64748b;
+                margin-top: 10px;
+            }
+
+        /* ─── 预览控制台 ─── */
+        #print-view {
+            padding-top: 80px;
+        }
+
+        .control-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 65px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 15px rgba(0,0,0,0.04);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            z-index: 100;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+            .control-bar .title {
+                font-size: 16px;
+                font-weight: bold;
+                color: #0f172a;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+                .control-bar .title::before {
+                    content: '';
+                    display: inline-block;
+                    width: 4px;
+                    height: 16px;
+                    background: #00b4d8;
+                    border-radius: 2px;
+                }
+
+        .tool-options {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .segmented-control {
+            display: flex;
+            background: #f1f5f9;
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .segment-btn {
+            border: none;
+            background: transparent;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+            .segment-btn.active {
+                background: #fff;
+                color: #0f172a;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #475569;
+            cursor: pointer;
+            user-select: none;
+        }
+
+            .checkbox-label input {
+                width: 15px;
+                height: 15px;
+                accent-color: #00b4d8;
+                cursor: pointer;
+            }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-primary {
+            background: #00b4d8;
+            color: #fff;
+            font-weight: bold;
+        }
+
+            .btn-primary:hover {
+                background: #0096b6;
+                box-shadow: 0 4px 12px rgba(0, 180, 216, 0.2);
+            }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+            .btn-secondary:hover {
+                background: #e2e8f0;
+            }
+
+        /* ─── 动态发票网格排版核心 ─── */
+        .invoice-container {
+            display: grid;
+            gap: 25px;
+            padding: 25px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .invoice-item {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: border-color 0.2s;
+        }
+
+        /* 💡 功能三：控制裁剪辅助虚线 */
+        .invoice-container.show-lines .invoice-item {
+            border: 2px dashed #cbd5e1;
+        }
+
+        .invoice-item canvas, .invoice-item img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+            transition: transform 0.25s ease;
+        }
+
+        /* 💡 功能一 & 功能二：浮动操作工具条 */
+        .item-actions {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 6px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 10;
+        }
+
+        .invoice-item:hover .item-actions {
+            opacity: 1;
+        }
+
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid #e2e8f0;
+            background: rgba(255,255,255,0.95);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+
+            .action-btn:hover {
+                transform: scale(1.1);
+                background: #fff;
+            }
+
+            .action-btn.btn-delete:hover {
+                border-color: #fca5a5;
+                background: #fef2f2;
+            }
+
+        /* 布局档位切换 */
+        .layout-2 {
+            grid-template-columns: repeat(1, 1fr);
+        }
+
+            .layout-2 .invoice-item {
+                height: 45vh;
+            }
+
+        .layout-3 {
+            grid-template-columns: repeat(1, 1fr);
+        }
+
+            .layout-3 .invoice-item {
+                height: 29vh;
+            }
+
+        .layout-4 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+            .layout-4 .invoice-item {
+                height: 45vh;
+            }
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-6px);
+            }
+        }
+
+        /* ─── 打印样式配置 ─── */
+        @media print {
+            body {
+                background: #fff;
+            }
+
+            .control-bar, .item-actions {
+                display: none !important;
+            }
+
+            #print-view {
+                padding-top: 0;
+            }
+
+            .invoice-container {
+                padding: 0;
+                gap: 0;
+                max-width: 100%;
+            }
+
+            .invoice-item {
+                box-shadow: none;
+                page-break-inside: avoid;
+                border-radius: 0;
+                border: 1px solid transparent;
+            }
+            /* 打印时如果开启了辅助线，强制渲染边框 */
+            .invoice-container.show-lines .invoice-item {
+                border: 1px dashed #666 !important;
+            }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+
+    <div id="upload-view">
+        <div class="upload-card">
+            <div class="drop-zone" onclick="document.getElementById('file-input').click()">
+                <span class="icon">🧾</span>
+                <h2>将 PDF 或图片发票拖到此处</h2>
+                <p style="margin: 8px 0 15px 0; color: #94a3b8;">或者 <span class="highlight">点击选择本地文件</span></p>
+                <p>💡 支持多选，系统将自动按 A4 纸张进行智能化拼版</p>
+                <input type="file" id="file-input" class="hidden" multiple accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(event)">
+            </div>
+        </div>
+    </div>
+
+    <div id="print-view" class="hidden">
+        <div class="control-bar">
+            <div class="title">发票合并打印预览</div>
+
+            <div class="tool-options">
+                <div class="segmented-control" id="layoutConfig">
+                    <button class="segment-btn" data-layout="2" onclick="setLayout(2)">每页 2 张</button>
+                    <button class="segment-btn" data-layout="3" onclick="setLayout(3)">每页 3 张</button>
+                    <button class="segment-btn" data-layout="4" onclick="setLayout(4)">每页 4 张</button>
+                </div>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="lineToggle" onchange="toggleLines(this.checked)"> 显示裁剪辅助线
+                </label>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="location.reload()">🔄 清空</button>
+                <button class="btn btn-primary" onclick="window.print()">🖨️ 立即打印</button>
+            </div>
+        </div>
+        <div class="invoice-container" id="invoice-container"></div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const container = document.getElementById('invoice-container');
+
+        // 💡 初始化：读取用户历史偏好设置
+        let currentLayout = parseInt(localStorage.getItem('prefer-layout')) || 2;
+        let lineEnabled = localStorage.getItem('prefer-lines') !== 'false'; // 默认开启
+
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById('lineToggle').checked = lineEnabled;
+            toggleLines(lineEnabled);
+            updateLayoutUI();
+        });
+
+        function setLayout(num) {
+            currentLayout = num;
+            localStorage.setItem('prefer-layout', num); // 记忆布局
+            updateLayoutUI();
+        }
+
+        function updateLayoutUI() {
+            container.className = `invoice-container layout-${currentLayout} ${lineEnabled ? 'show-lines' : ''}`;
+            document.querySelectorAll('.segment-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.layout) === currentLayout);
+            });
+        }
+
+        function toggleLines(visible) {
+            lineEnabled = visible;
+            localStorage.setItem('prefer-lines', visible); // 记忆辅助线状态
+            if (visible) {
+                container.classList.add('show-lines');
+            } else {
+                container.classList.remove('show-lines');
+            }
+        }
+
+        // 处理本地点击浏览文件
+        async function handleFileSelect(event) {
+            const files = event.target.files;
+            if (!files.length) return;
+
+            const localPayloadList = [];
+            for (let file of files) {
+                const extension = '.' + file.name.split('.').pop().toLowerCase();
+                const dataUrl = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+                localPayloadList.push({ name: file.name, type: extension, data: dataUrl });
+            }
+            window.handleDroppedFiles(localPayloadList);
+        }
+
+        // 核心渲染流（拖拽与点击共用）
+        window.handleDroppedFiles = async function (fileList) {
+            document.getElementById('upload-view').classList.add('hidden');
+            document.getElementById('print-view').classList.remove('hidden');
+
+            for (let file of fileList) {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'invoice-item';
+                itemDiv.dataset.rotation = "0"; // 初始角度
+
+                // 💡 功能一 & 二：动态挂载操作按钮
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'item-actions';
+
+                const rotateBtn = document.createElement('button');
+                rotateBtn.className = 'action-btn';
+                rotateBtn.innerHTML = '🔄';
+                rotateBtn.title = '向右旋转90度';
+                rotateBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    let currentRot = parseInt(itemDiv.dataset.rotation) + 90;
+                    if (currentRot >= 360) currentRot = 0;
+                    itemDiv.dataset.rotation = currentRot;
+                    const mediaEl = itemDiv.querySelector('canvas, img');
+                    if (mediaEl) mediaEl.style.transform = `rotate(${currentRot}deg)`;
+                };
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'action-btn btn-delete';
+                deleteBtn.innerHTML = '❌';
+                deleteBtn.title = '删除单张发票';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    itemDiv.remove();
+                    // 如果删光了，自动跳回上传界面
+                    if (container.children.length === 0) {
+                        location.reload();
+                    }
+                };
+
+                actionsDiv.appendChild(rotateBtn);
+                actionsDiv.appendChild(deleteBtn);
+                itemDiv.appendChild(actionsDiv);
+                container.appendChild(itemDiv);
+
+                if (file.type === '.pdf') {
+                    try {
+                        const loadingTask = pdfjsLib.getDocument(file.data);
+                        const pdf = await loadingTask.promise;
+                        const page = await pdf.getPage(1);
+
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        const viewport = page.getViewport({ scale: 1.6 }); // 提升至1.6倍，打印字迹更锐利
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+
+                        await page.render({ canvasContext: context, viewport: viewport }).promise;
+                        itemDiv.appendChild(canvas);
+                    } catch (err) {
+                        itemDiv.innerHTML += `<p style="color:#ef4444;font-size:13px;padding:20px;">⚠️ PDF解析失败</p>`;
+                    }
+                } else if (['.jpg', '.jpeg', '.png'].includes(file.type)) {
+                    const img = document.createElement('img');
+                    img.src = file.data;
+                    itemDiv.appendChild(img);
+                }
+            }
+        };
+    </script>
+</body>
+</html>
